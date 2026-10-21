@@ -1,0 +1,20 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 1rem;
+}
+
+main {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+canvas {
+  border: 2px solid #333;
+  background: #f1efe6;
+}
+
+#panel {
+  min-width: 16rem;
+}

@@ -1,0 +1,33 @@
+# Dependencias
+node_modules/
+
+# Build de Vite
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Variables de entorno
+.env
+.env.*
+
+# Despliegue en Vercel
+.vercel/
+
+# Cobertura de pruebas
+coverage/
+
+# Archivos de TypeScript generados
+*.tsbuildinfo
+
+# Editor y sistema operativo
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# CSV generados por la ejecución headless (se conserva la carpeta con .gitkeep)
+output/*
+!output/.gitkeep
