@@ -1,61 +1,101 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import {
+  ANCHO_MESA,
+  COMPRESION_MAXIMA,
+  DT,
+  E_PLANO,
   GRAVEDAD,
   INCLINACION_INICIAL,
+  K_LANZADOR,
   LARGO_MESA,
   MASA_BOLA,
   RADIO_BOLA,
-  DT,
-  gravedadEfectiva,
-  avanzarBola,
   energiaCinetica,
+  energiaElastica,
   energiaPotencialGravitatoria,
 } from "../src/physics/index";
-import type { Bola } from "../src/physics/index";
+import type { EntradasUsuario, EstadoGlobal } from "../src/physics/index";
+import { avanzarSimulacion } from "../src/physics/world";
 
 /**
- * Escenario fijo sin interfaz: la bola parte del reposo en (0.28, 0.10) m y se desliza
- * por la mesa inclinada hasta llegar al borde inferior (y >= L) o a los 10 s.
+ * Escenario fijo sin interfaz: la bola parte del reposo en (0.28, 0.10) m sobre la mesa
+ * inclinada y rebota contra un piso horizontal en y = 0.70 m (e = E_PLANO) durante 10 s.
  * Escribe output/simulacion.csv con la evolución temporal. Es determinista.
+ *
+ * Columnas: t (s), x, y (m), vx, vy (m/s), K, Ug, Uel, E (J),
+ * colisiones (cantidad de impactos en el paso) y E_disipada_J (J disipados en el paso).
  */
 const TIEMPO_MAXIMO = 10; // s
 
-let bola: Bola = {
-  posicion: { x: 0.28, y: 0.1 },
-  velocidad: { x: 0, y: 0 },
-  radio: RADIO_BOLA,
-  masa: MASA_BOLA,
+const ENTRADAS: EntradasUsuario = {
+  flipperIzquierdo: false,
+  flipperDerecho: false,
+  compresionLanzador: 0,
 };
 
-const aceleracion = gravedadEfectiva(GRAVEDAD, INCLINACION_INICIAL);
-const filas: string[] = ["t_s,x_m,y_m,vx_m_s,vy_m_s,K_J,Ug_J,E_J"];
+let estado: EstadoGlobal = {
+  bola: {
+    posicion: { x: 0.28, y: 0.1 },
+    velocidad: { x: 0, y: 0 },
+    radio: RADIO_BOLA,
+    masa: MASA_BOLA,
+  },
+  obstaculosCirculares: [],
+  obstaculosPlanos: [
+    { p1: { x: 0, y: 0.7 }, p2: { x: ANCHO_MESA, y: 0.7 }, restitucion: E_PLANO },
+  ],
+  flippers: [],
+  lanzador: {
+    constanteElastica: K_LANZADOR,
+    compresion: 0,
+    direccion: { x: 0, y: -1 },
+    compresionMaxima: COMPRESION_MAXIMA,
+  },
+  mesa: { inclinacion: INCLINACION_INICIAL, gravedad: GRAVEDAD },
+  marcador: 0,
+  vidas: 3,
+  tiempo: 0,
+};
 
-function registrar(t: number): void {
+const filas: string[] = [
+  "t_s,x_m,y_m,vx_m_s,vy_m_s,K_J,Ug_J,Uel_J,E_J,colisiones,E_disipada_J",
+];
+
+function registrar(colisiones: number, disipada: number): void {
+  const { bola, mesa, lanzador } = estado;
   const k = energiaCinetica(bola);
-  const ug = energiaPotencialGravitatoria(bola, GRAVEDAD, INCLINACION_INICIAL, LARGO_MESA);
+  const ug = energiaPotencialGravitatoria(bola, mesa.gravedad, mesa.inclinacion, LARGO_MESA);
+  const uel = energiaElastica(lanzador.constanteElastica, lanzador.compresion);
   filas.push(
     [
-      t,
+      estado.tiempo,
       bola.posicion.x,
       bola.posicion.y,
       bola.velocidad.x,
       bola.velocidad.y,
       k,
       ug,
-      k + ug,
+      uel,
+      k + ug + uel,
+      colisiones,
+      disipada,
     ].join(","),
   );
 }
 
-let t = 0;
-registrar(t);
-const pasosMaximos = Math.round(TIEMPO_MAXIMO / DT);
-for (let i = 1; i <= pasosMaximos && bola.posicion.y < LARGO_MESA; i++) {
-  bola = avanzarBola(bola, aceleracion, DT);
-  t = i * DT;
-  registrar(t);
+registrar(0, 0);
+const pasos = Math.round(TIEMPO_MAXIMO / DT);
+let totalColisiones = 0;
+for (let i = 1; i <= pasos; i++) {
+  const resultado = avanzarSimulacion(estado, DT, ENTRADAS);
+  estado = resultado.estado;
+  const disipada = resultado.eventos.reduce((suma, e) => suma + e.energiaDisipada, 0);
+  totalColisiones += resultado.eventos.length;
+  registrar(resultado.eventos.length, disipada);
 }
 
 mkdirSync("output", { recursive: true });
 writeFileSync("output/simulacion.csv", filas.join("\n") + "\n");
-console.log(`CSV generado: output/simulacion.csv (${filas.length - 1} pasos, t = ${t.toFixed(4)} s)`);
+console.log(
+  `CSV generado: output/simulacion.csv (${pasos} pasos, t = ${estado.tiempo.toFixed(4)} s, ${totalColisiones} colisiones)`,
+);
