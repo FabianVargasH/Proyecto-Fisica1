@@ -56,3 +56,24 @@ export interface EstadoGlobal {
   vidas: number;
   tiempo: number; // s
 }
+
+/** Entradas del usuario para un paso de simulación. */
+export interface EntradasUsuario {
+  flipperIzquierdo: boolean; // true = control presionado
+  flipperDerecho: boolean; // true = control presionado
+  compresionLanzador: number; // m, entre 0 y compresionMaxima
+}
+
+/** Evento de colisión producido durante un paso. */
+export interface EventoColision {
+  instante: number; // s, tiempo simulado en que ocurre el impacto
+  tipo: "circular" | "plano";
+  indice: number; // posición del obstáculo en su lista
+  energiaDisipada: number; // J
+}
+
+/** Resultado de avanzar la simulación un paso. */
+export interface ResultadoPaso {
+  estado: EstadoGlobal;
+  eventos: EventoColision[];
+}
