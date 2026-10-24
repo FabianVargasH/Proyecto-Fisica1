@@ -10,7 +10,7 @@ Integrantes: Danny Jhoel Arias Jiménez, Fabiola María Román Barrantes, Luis �
 | --- | --- |
 | Instalar dependencias | `npm install` |
 | Correr pruebas | `npm test` |
-| Ejecución headless (genera `output/simulacion.csv`) | `npm run headless` |
+| Ejecución headless (genera `output/simulacion.csv`; ver columnas más abajo) | `npm run headless` |
 | Servidor de desarrollo | `npm run dev` |
 | Verificar tipos (incluye la librería sin tipos del DOM) | `npm run typecheck` |
 
@@ -20,6 +20,7 @@ Integrantes: Danny Jhoel Arias Jiménez, Fabiola María Román Barrantes, Luis �
 - `src/ui/`: interfaz que consume la librería.
 - `tests/physics/`: pruebas unitarias y de validación analítica.
 - `scripts/headless.ts`: escenario fijo sin interfaz que escribe un CSV en `output/`.
+- `evidencia/`: copia versionada del CSV headless (`simulacion_ejemplo.csv`), para auditar el modelo sin ejecutar nada. Es determinista: regenerarlo con `npm run headless` produce el mismo contenido.
 
 Restricciones: solo tecnologías web, sin motores físicos de terceros. Dependencia de ejecución: Chart.js (graficación).
 
@@ -83,6 +84,20 @@ Todo el núcleo opera en el Sistema Internacional: m, kg, s, rad, N, J. El orige
 | `energiaPotencialGravitatoria(bola, g, theta, largoMesa)` | `Bola`, g (m/s²), θ (rad), L (m) | Ug (J) |
 | `energiaMecanica(bola, g, theta, largoMesa, energiaElasticaLanzador?)` | ídem, Uel (J) | E = K + Ug + Uel (J) |
 
+### Orquestador (`world`)
+
+| Función | Recibe | Devuelve |
+| --- | --- | --- |
+| `avanzarSimulacion(estado, dt, entradas)` | `EstadoGlobal`, Δt (s), `EntradasUsuario` | `ResultadoPaso` = `{ estado: EstadoGlobal, eventos: EventoColision[] }` |
+
+Orden dentro del paso: gravedad efectiva, integración de la bola, detección continua (`primerImpacto`), resolución con la restitución del obstáculo y la masa de la bola, y repetición con el tiempo restante del paso (contactos múltiples, hasta `MAX_CONTACTOS_POR_PASO` = 8). No modifica `estado`: mismo estado y mismo `dt` dan el mismo resultado. En el Avance 2 los flippers, el lanzador, el marcador y las vidas viajan en el estado pero aún no se actualizan.
+
+| Tipo | Campos |
+| --- | --- |
+| `EntradasUsuario` | `flipperIzquierdo` (boolean), `flipperDerecho` (boolean), `compresionLanzador` (m) |
+| `EventoColision` | `instante` (s), `tipo` (`"circular"` o `"plano"`), `indice` (posición en su lista), `energiaDisipada` (J) |
+| `ResultadoPaso` | `estado` (`EstadoGlobal`), `eventos` (`EventoColision[]`) |
+
 ## Pruebas de validación analítica
 
 1. Caída por el plano inclinado: t = √(2d/a) con a = g·sen θ (`tests/physics/analytic.test.ts`).
@@ -91,6 +106,12 @@ Todo el núcleo opera en el Sistema Internacional: m, kg, s, rad, N, J. El orige
 
 Además, `tests/physics/response.test.ts` valida la disipación por choque ΔE = ½·m·(1 − e²)·vₙ².
 
+`tests/physics/world.test.ts` valida el orquestador: pureza (no modifica el estado de entrada), determinismo, contactos múltiples en un mismo paso sin atravesar obstáculos, energía disipada del evento = ½·m·(1 − e²)·vₙ² (tolerancia relativa 1e-9) y balance de energía con disipación (E antes − E después = energía disipada, tolerancia absoluta 1e-5 J por paso).
+
+## Escenario y CSV del headless
+
+La bola parte del reposo en (0.28, 0.10) m con θ = 6.5° y rebota 10 s contra un piso horizontal en y = 0.70 m (e = 0.60, restitución de obstáculo plano). Columnas de `output/simulacion.csv`: `t_s` (s), `x_m`, `y_m` (m), `vx_m_s`, `vy_m_s` (m/s), `K_J`, `Ug_J`, `Uel_J`, `E_J` (J), `colisiones` (impactos en el paso) y `E_disipada_J` (J disipados en el paso).
+
 ## Estado
 
-Implementado: núcleo vectorial, gravedad efectiva, integración, detección de colisiones (estática y continua), resolución de impactos, lanzador y energías. Pendiente para la Entrega Final: flippers, orquestador, mecánica de juego, interfaz completa y gráficas G1 a G3.
+Implementado: núcleo vectorial, gravedad efectiva, integración, detección de colisiones (estática y continua), resolución de impactos, lanzador, energías y orquestador (`avanzarSimulacion`). Pendiente para la Entrega Final: flippers, mecánica de juego (marcador, vidas, fin de partida), interfaz completa y gráficas G1 a G3.

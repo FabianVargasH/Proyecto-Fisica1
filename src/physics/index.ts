@@ -7,3 +7,4 @@ export * from "./collisions";
 export * from "./response";
 export * from "./launcher";
 export * from "./energy";
+export * from "./world";
