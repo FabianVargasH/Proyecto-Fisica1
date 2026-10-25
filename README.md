@@ -15,7 +15,7 @@ Simulador interactivo web basado en un motor de física propio (determinista y d
 | Acción | Comando | Descripción |
 | :--- | :--- | :--- |
 | **Instalar dependencias** | `npm install` | Instala TypeScript, Vite, Vitest y dependencias de graficación. |
-| **Correr pruebas** | `npm test` | Ejecuta la suite de pruebas unitarias y de validación analítica (54 pruebas). |
+| **Correr pruebas** | `npm test` | Ejecuta la suite de pruebas unitarias y de validación analítica (55 pruebas). |
 | **Simulación headless** | `npm run headless` | Ejecuta el escenario determinista sin DOM y genera `output/simulacion.csv`. |
 | **Servidor de desarrollo** | `npm run dev` | Inicia el servidor local interactivo de Vite en `http://localhost:5173/`. |
 | **Verificación estricta de tipos** | `npm run typecheck` | Ejecuta `tsc` para la UI y `tsconfig.physics.json` (verifica que física no use DOM). |
@@ -45,7 +45,7 @@ El repositorio implementa una estricta separación de responsabilidades:
 │   └── ui/                    # Capa de presentación y visualización web
 │       ├── renderer.ts        # Renderizado en Canvas 2D (escala métrica, bola, obstáculos, vectores)
 │       ├── controls.ts        # Enlace del panel de control (Play, Pause, Step, Reset, slider θ, presets)
-│       ├── charts.ts          # Gráficas en tiempo real de Chart.js (G2 Rapidez y G3 Balance de Energía)
+│       ├── charts.ts          # Gráficas en tiempo real de Chart.js (G1 Energías y G2 Rapidez)
 │       ├── series.ts          # Estructura de serie temporal con ventana deslizante (10 s)
 │       ├── main.ts            # Integración del bucle temporal a 240 Hz y HUD de telemetría
 │       └── style.css          # Estilo sobrio y claro (verde institucional, blanco, iconos SVG)
@@ -93,7 +93,7 @@ El repositorio implementa una estricta separación de responsabilidades:
 * `contactoBolaCirculo(bola, obstaculo): Contacto | null` — Contacto estático contra círculo.
 * `contactoBolaSegmento(bola, obstaculo): Contacto | null` — Contacto estático contra segmento.
 * `impactoContinuoCirculo(pAnterior, pSiguiente, radio, obstaculo): Impacto | null` — Detección continua de trayectoria contra círculo (evita efecto túnel).
-* `impactoContinuoSegmento(pAnterior, pSiguiente, radio, obstaculo): Impacto | null` — Detección continua de trayectoria contra segmento.
+* `impactoContinuoSegmento(pAnterior, pSiguiente, radio, obstaculo, vObstaculo?, dt?): Impacto | null` — Detección continua contra segmento, con obstáculo posiblemente móvil (`vObstaculo` en m/s, `dt` en s; omitir ambos para obstáculos fijos).
 * `primerImpacto(pAnterior, pSiguiente, radio, circulos, planos): ImpactoIdentificado | null` — Determina cronológicamente la primera colisión dentro del paso.
 
 ### 5. Respuesta Dinámica al Impacto (`response.ts`)
@@ -112,8 +112,16 @@ El repositorio implementa una estricta separación de responsabilidades:
 * `energiaMecanica(bola, g, theta, largoMesa, uEl?): number` — Energía total $E = K + U_g + U_{el}$ ($J$).
 
 ### 8. Orquestador y Estado Global (`world.ts`)
-* `avanzarSimulacion(estado: EstadoGlobal, dt: number, entradas: EntradasUsuario): ResultadoPaso` — Avanza el sistema un paso $\Delta t$. Resuelve gravedad efectiva, integración, detección continua y hasta 8 rebotes múltiples por paso sin atravesamiento, devolviendo el nuevo estado y el registro de eventos de colisión.
+* `avanzarSimulacion(estado: EstadoGlobal, dt: number, entradas: EntradasUsuario): ResultadoPaso` — Avanza el sistema un paso $\Delta t$. Resuelve gravedad efectiva, integración, detección continua y hasta 8 rebotes múltiples por paso sin atravesamiento, devolviendo el nuevo estado y el registro de eventos de colisión. Los impactos con rapidez normal menor que `UMBRAL_REPOSO` (0.01 m/s) se tratan como contacto en reposo: no generan evento y la bola queda apoyada sobre el obstáculo (no atraviesa).
 * `setTheta(estado: EstadoGlobal, theta: number): EstadoGlobal` (alias `setAngle`) — Modifica el ángulo $\theta$ en radianes de forma pura, permitiendo ajustar la inclinación en reposo o durante la simulación.
+
+Tipos de entrada y salida de `avanzarSimulacion`:
+
+| Tipo | Campos |
+| :--- | :--- |
+| `EntradasUsuario` | `flipperIzquierdo` (boolean), `flipperDerecho` (boolean), `compresionLanzador` (m) |
+| `EventoColision` | `instante` (s), `tipo` (`"circular"` o `"plano"`), `indice` (posición en su lista), `energiaDisipada` (J) |
+| `ResultadoPaso` | `estado` (`EstadoGlobal`), `eventos` (`EventoColision[]`) |
 
 ---
 
@@ -126,6 +134,7 @@ La suite de Vitest certifica el cumplimiento riguroso de las leyes de Newton y l
 3. **Conservación de la Energía (`tests/physics/energy.test.ts`):** En ausencia de colisiones o con $e = 1.0$, la energía mecánica $E = K + U_g$ se mantiene constante dentro del $1\%$ tras 10 s de evolución temporal continua.
 4. **Disipación Exacta por Choque (`tests/physics/response.test.ts`):** Confirma que cada impacto disipe exactamente $\Delta E = \frac{1}{2}m(1 - e^2)v_n^2$ con tolerancia relativa de $10^{-9}$.
 5. **Balance Energético Global del Orquestador (`tests/physics/world.test.ts`):** Comprueba que en cada paso se cumpla $E_{antes} - E_{despues} = \sum \Delta E$ con tolerancia absoluta de $10^{-5}\text{ J}$, y que $E_0 - E_f$ coincida con la sumatoria de energía disipada en todos los rebotes.
+6. **Contacto en reposo (`tests/physics/world.test.ts`):** Tras 20 s con $e = 0.60$ la bola queda apoyada en $y = 0.70 - r$ (tolerancia $10^{-6}\text{ m}$) y nunca atraviesa el piso.
 
 ---
 
@@ -148,8 +157,8 @@ Genera `output/simulacion.csv` con las siguientes columnas para análisis cient�
 
 ## Interfaz de Usuario y Características Interactivas
 
-* **Diseño Sobrio y Académico:** Paleta de colores clara estructurada en verde institucional CENFOTEC (`#15803d`), blanco y gris neutro pizarra (`#f1f5f9`, `#e2e8f0`), con patrones limpios pre-2021 y sin uso de emojis (todos reemplazados por iconos vectoriales SVG).
-* **Control de Inclinación:** Control deslizante calibrado en el rango reglamentario $\theta \in [3.0^\circ, 15.0^\circ]$, con visualización simultánea en grados y radianes, actualizando en tiempo real la aceleración $a = g\sin\theta$.
+* **Diseño Sobrio y Académico:** Paleta de colores clara estructurada en verde institucional CENFOTEC (`#15803d`), blanco y gris neutro pizarra (`#f1f5f9`, `#e2e8f0`), con iconos vectoriales SVG.
+* **Control de Inclinación:** Control deslizante calibrado en el rango reglamentario $\theta \in [3.0^\circ, 15.0^\circ]$, con visualización simultánea en grados y radianes, actualizando en tiempo real la aceleración $a = g\sin\theta$. Cambiar $\theta$ reinicia la simulación ($\theta$ es constante durante la partida).
 * **Controles de Laboratorio:** Iniciar, Pausar, Paso a paso ($\Delta t = 1/240\text{ s}$), Reiniciar y selector de velocidad de reproducción ($0.25\times, 0.50\times, 1.00\times, 2.00\times$) para inspección de colisiones en cámara lenta.
 * **Interacción Directa en Mesa:** Posibilidad de hacer clic sobre cualquier punto de la mesa para posicionar y soltar la bola instantáneamente.
 * **Escenarios Preconfigurados:**
@@ -157,8 +166,8 @@ Genera `output/simulacion.csv` con las siguientes columnas para análisis cient�
   2. *Mesa con Bumpers:* Mesa completa con paredes laterales y parachoques circulares ($e = 0.80$).
   3. *Caída Libre:* Plano libre sin obstáculos para verificación analítica de tiempos y aceleración.
 * **Doble Panel Gráfico en Tiempo Real (Chart.js):**
+  * **G1 — Energías vs. Tiempo:** energía cinética (K), potencial gravitatoria (Ug), elástica del lanzador (Uel) y energía total (E), con disipación escalonada en cada rebote.
   * **G2 — Rapidez vs. Tiempo:** Curva continua de rapidez con marcadores rojos discretos en cada evento de impacto.
-  * **G3 — Balance Energético vs. Tiempo:** Curvas simultáneas de energía cinética ($K$), potencial ($U_g$) y mecánica total ($E_m$), evidenciando visualmente las pérdidas en cada rebote.
 * **Exportador Telemétrico:** Botón de descarga de CSV con la sesión en vivo para análisis y auditoría.
 
 ---
@@ -167,12 +176,16 @@ Genera `output/simulacion.csv` con las siguientes columnas para análisis cient�
 
 ### Requisitos del Avance 2:
 - [x] Motor de física puro, determinista y desacoplado (en SI, sin DOM ni canvas).
-- [x] Suite de pruebas unitarias y de validación analítica pasando al 100% (54 pruebas).
+- [x] Suite de pruebas unitarias y de validación analítica pasando al 100% (55 pruebas).
 - [x] Script headless ejecutable que genera el archivo CSV reproducible con 10 s de datos.
 - [x] Interfaz interactiva desplegable con manipulación de parámetros ($\theta \in [3^\circ, 15^\circ]$, Play, Pause, Step, Reset).
-- [x] Gráficas en tiempo real de Rapidez vs. Tiempo (G2) y Balance de Energía (G3) con unidades SI.
+- [x] Gráficas en tiempo real de Energías vs. Tiempo (G1) y Rapidez vs. Tiempo (G2) con unidades SI.
 
 ### Trabajo para la Entrega Final:
-- [ ] Implementación de la cinemática de paletas / flippers interactivos (`flipper.ts`).
-- [ ] Mecánicas de juego completas (marcador de puntos por rebote, vidas y fin de partida).
-- [ ] Refinamiento de modelos de fricción por contacto y arrastre en dinámica extendida.
+- [ ] `flipper.ts`: impacto con vc = ω × r (el flipper derecho es simétrico).
+- [ ] Lanzador con ESPACIO y flippers con ← y →.
+- [ ] Marcador, 3 vidas, drenaje y fin de partida.
+- [ ] Obstáculos de al menos dos geometrías y modo bonificación.
+- [ ] Gráfica G3: energía disipada por colisión, por tipo de obstáculo.
+- [ ] Modo depuración (tecla D): vector de velocidad, normales de contacto y balance de energía.
+- [ ] Pulido, pruebas de robustez y ensayo de la exposición.
