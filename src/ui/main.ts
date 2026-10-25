@@ -20,7 +20,6 @@ import {
   energiaPotencialGravitatoria,
   gravedadEfectiva,
   norma,
-  setTheta as setThetaFisica,
 } from "../physics/index";
 import type {
   EntradasUsuario,
@@ -192,7 +191,8 @@ function actualizarTelemetria(): void {
   const a = gravedadEfectiva(estado.mesa.gravedad, estado.mesa.inclinacion);
   const k = energiaCinetica(estado.bola);
   const ug = energiaPotencialGravitatoria(estado.bola, estado.mesa.gravedad, estado.mesa.inclinacion, LARGO_MESA);
-  const em = energiaMecanica(estado.bola, estado.mesa.gravedad, estado.mesa.inclinacion, LARGO_MESA);
+  const uel = energiaElastica(estado.lanzador.constanteElastica, estado.lanzador.compresion);
+  const em = energiaMecanica(estado.bola, estado.mesa.gravedad, estado.mesa.inclinacion, LARGO_MESA, uel);
   const anguloDeg = (estado.mesa.inclinacion * 180) / Math.PI;
 
   if (elTiempo) elTiempo.textContent = `${estado.tiempo.toFixed(3)} s`;
@@ -213,16 +213,15 @@ function actualizarTelemetria(): void {
 }
 
 /**
- * Modifica el ángulo de inclinación θ de la mesa (en radianes), actualizando el estado físico,
- * los controles y el HUD de telemetría.
+ * Modifica el ángulo de inclinación θ de la mesa (en radianes), actualizando los controles
+ * y reiniciando la simulación: θ es constante durante la partida (Avance 1).
  * @param nuevoTheta ángulo en radianes, θ ∈ [INCLINACION_MIN, INCLINACION_MAX]
  */
 export function setTheta(nuevoTheta: number): void {
   theta = Math.max(INCLINACION_MIN, Math.min(INCLINACION_MAX, nuevoTheta));
-  estado = setThetaFisica(estado, theta);
   panelControles.fijarAngulo(theta);
-  renderer.render(estado);
-  actualizarTelemetria();
+  // θ es constante durante la partida (Avance 1): cambiarlo reinicia la simulación.
+  reiniciarSimulacion();
 }
 
 export const setAngle = setTheta;
@@ -321,8 +320,9 @@ function ejecutarPaso(deltaT: number): void {
   graficaRapidez.registrar(estado.tiempo, estado.bola.velocidad, resultado.eventos);
   const k = energiaCinetica(estado.bola);
   const ug = energiaPotencialGravitatoria(estado.bola, estado.mesa.gravedad, estado.mesa.inclinacion, LARGO_MESA);
-  const em = energiaMecanica(estado.bola, estado.mesa.gravedad, estado.mesa.inclinacion, LARGO_MESA);
-  graficaEnergia.registrar(estado.tiempo, k, ug, em);
+  const uel = energiaElastica(estado.lanzador.constanteElastica, estado.lanzador.compresion);
+  const em = energiaMecanica(estado.bola, estado.mesa.gravedad, estado.mesa.inclinacion, LARGO_MESA, uel);
+  graficaEnergia.registrar(estado.tiempo, k, ug, uel, em);
 
   // Registrar en buffer CSV
   registrarPuntoCSV(resultado.eventos.length, disipadaPaso);

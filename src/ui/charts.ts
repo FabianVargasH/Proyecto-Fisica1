@@ -122,7 +122,7 @@ export function crearGraficaRapidez(canvas: HTMLCanvasElement): GraficaRapidez {
 }
 
 export interface GraficaEnergia {
-  registrar(tiempo: number, k: number, ug: number, em: number): void;
+  registrar(tiempo: number, k: number, ug: number, uel: number, em: number): void;
   reiniciar(): void;
   destruir(): void;
 }
@@ -130,6 +130,7 @@ export interface GraficaEnergia {
 export function crearGraficaEnergia(canvas: HTMLCanvasElement): GraficaEnergia {
   const serieK = new SerieTemporal(VENTANA_S, PASO_MUESTREO_S);
   const serieUg = new SerieTemporal(VENTANA_S, PASO_MUESTREO_S);
+  const serieUel = new SerieTemporal(VENTANA_S, PASO_MUESTREO_S);
   const serieEm = new SerieTemporal(VENTANA_S, PASO_MUESTREO_S);
 
   const grafica = new Chart(canvas, {
@@ -157,7 +158,17 @@ export function crearGraficaEnergia(canvas: HTMLCanvasElement): GraficaEnergia {
           tension: 0,
         },
         {
-          label: "Mecánica Total (Em)",
+          label: "Elástica del lanzador (Uel)",
+          data: serieUel.datos,
+          showLine: true,
+          borderColor: "#7c3aed",
+          backgroundColor: "#7c3aed",
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0,
+        },
+        {
+          label: "Energía total (E)",
           data: serieEm.datos,
           showLine: true,
           borderColor: "#15803d",
@@ -176,7 +187,7 @@ export function crearGraficaEnergia(canvas: HTMLCanvasElement): GraficaEnergia {
       plugins: {
         title: {
           display: true,
-          text: "G3 · Balance de Energía vs tiempo",
+          text: "G1 · Energías vs tiempo",
           color: "#0f172a",
           font: { size: 13, weight: "bold", family: "Inter, sans-serif" },
         },
@@ -212,9 +223,10 @@ export function crearGraficaEnergia(canvas: HTMLCanvasElement): GraficaEnergia {
   });
 
   return {
-    registrar(tiempo, k, ug, em) {
+    registrar(tiempo, k, ug, uel, em) {
       serieK.agregar(tiempo, k);
       serieUg.agregar(tiempo, ug);
+      serieUel.agregar(tiempo, uel);
       serieEm.agregar(tiempo, em);
 
       const x = grafica.options.scales!.x!;
@@ -225,6 +237,7 @@ export function crearGraficaEnergia(canvas: HTMLCanvasElement): GraficaEnergia {
     reiniciar() {
       serieK.limpiar();
       serieUg.limpiar();
+      serieUel.limpiar();
       serieEm.limpiar();
       const x = grafica.options.scales!.x!;
       x.min = 0;
