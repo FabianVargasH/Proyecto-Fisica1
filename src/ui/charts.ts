@@ -14,30 +14,15 @@ import { SerieTemporal } from "./series";
 
 Chart.register(ScatterController, LinearScale, PointElement, LineElement, Legend, Tooltip, Title);
 
-/** Duración visible del eje horizontal (s). */
 export const VENTANA_S = 10;
-/** Separación mínima entre puntos de la curva (s): ~60 puntos por segundo simulado. */
 const PASO_MUESTREO_S = 1 / 60;
 
 export interface GraficaRapidez {
-  /**
-   * Registra el estado de un paso de simulación.
-   * @param tiempo tiempo simulado al final del paso (s)
-   * @param velocidad velocidad de la bola (m/s)
-   * @param colisiones eventos del paso (`ResultadoPaso.eventos`); cada uno agrega un punto rojo
-   */
   registrar(tiempo: number, velocidad: Vec2, colisiones?: readonly EventoColision[]): void;
-  /** Borra los datos (usar al reiniciar la simulación). */
   reiniciar(): void;
-  /** Libera el canvas. */
   destruir(): void;
 }
 
-/**
- * G2: rapidez de la bola |v| (m/s) contra el tiempo (s), con un punto por cada colisión.
- * La conversión de unidades no es necesaria: la librería ya trabaja en SI.
- * El `canvas` debe estar dentro de un contenedor con altura definida (ver style.css).
- */
 export function crearGraficaRapidez(canvas: HTMLCanvasElement): GraficaRapidez {
   const curva = new SerieTemporal(VENTANA_S, PASO_MUESTREO_S);
   const choques = new SerieTemporal(VENTANA_S, 0);
@@ -77,7 +62,8 @@ export function crearGraficaRapidez(canvas: HTMLCanvasElement): GraficaRapidez {
         legend: { position: "bottom" },
         tooltip: {
           callbacks: {
-            label: (c) => `${c.dataset.label}: ${c.parsed.y?.toFixed(3)} m/s en t = ${c.parsed.x?.toFixed(3)} s`,
+            label: (c) =>
+              `${c.dataset.label}: ${c.parsed.y?.toFixed(3)} m/s en t = ${c.parsed.x?.toFixed(3)} s`,
           },
         },
       },
@@ -101,7 +87,6 @@ export function crearGraficaRapidez(canvas: HTMLCanvasElement): GraficaRapidez {
     registrar(tiempo, velocidad, colisiones = []) {
       const rapidez = norma(velocidad);
       curva.agregar(tiempo, rapidez);
-      // Aproximación: la rapidez del punto es la del final del paso (dt = 1/240 s).
       for (const c of colisiones) choques.agregar(c.instante, rapidez, true);
       choques.recortar(tiempo);
 
