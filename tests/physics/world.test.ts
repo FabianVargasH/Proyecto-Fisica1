@@ -179,7 +179,18 @@ describe("avanzarSimulacion", () => {
     expect(totalEventos).toBeGreaterThanOrEqual(2);
     expect(Math.abs(E0 - energiaMecanica(estado) - sumaDisipada)).toBeLessThanOrEqual(tolerancia * 10);
   });
-
+  it("contacto en reposo: tras 20 s la bola sigue sobre el piso y nunca lo atraviesa", () => {
+    let estado = crearEstado({ obstaculosPlanos: [PISO] });
+    const limite = PISO.p1.y - RADIO_BOLA;
+    let maxY = 0;
+    for (let i = 0; i < 20 * 240; i++) {
+      estado = avanzarSimulacion(estado, DT, ENTRADAS).estado;
+      maxY = Math.max(maxY, estado.bola.posicion.y);
+    }
+    expect(maxY).toBeLessThanOrEqual(limite + 1e-6);
+    expect(Math.abs(estado.bola.posicion.y - limite)).toBeLessThanOrEqual(1e-6);
+    expect(Math.hypot(estado.bola.velocidad.x, estado.bola.velocidad.y)).toBeLessThan(0.02);
+  });
   describe("setTheta y setAngle", () => {
     it("actualiza la inclinación de la mesa de forma pura sin mutar el estado original", () => {
       const original = crearEstado();
