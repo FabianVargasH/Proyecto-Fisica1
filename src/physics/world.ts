@@ -81,3 +81,22 @@ export function avanzarSimulacion(
     eventos,
   };
 }
+
+/**
+ * Modifica el ángulo de inclinación θ de la mesa en el estado físico.
+ * Función pura: retorna un nuevo estado con el ángulo actualizado.
+ * @param estado estado global actual
+ * @param theta nuevo ángulo en radianes (θ ∈ [3°, 15°])
+ * @returns nuevo estado global con la inclinación actualizada
+ */
+export function setTheta(estado: EstadoGlobal, theta: number): EstadoGlobal {
+  return {
+    ...estado,
+    mesa: {
+      ...estado.mesa,
+      inclinacion: theta,
+    },
+  };
+}
+
+export const setAngle = setTheta;

@@ -10,7 +10,7 @@ import {
   RADIO_BOLA,
   DT,
 } from "../../src/physics/constants";
-import { avanzarSimulacion } from "../../src/physics/world";
+import { avanzarSimulacion, setAngle, setTheta } from "../../src/physics/world";
 import type { EntradasUsuario, EstadoGlobal, ObstaculoPlano } from "../../src/physics/types";
 
 const ENTRADAS: EntradasUsuario = {
@@ -178,5 +178,17 @@ describe("avanzarSimulacion", () => {
 
     expect(totalEventos).toBeGreaterThanOrEqual(2);
     expect(Math.abs(E0 - energiaMecanica(estado) - sumaDisipada)).toBeLessThanOrEqual(tolerancia * 10);
+  });
+
+  describe("setTheta y setAngle", () => {
+    it("actualiza la inclinación de la mesa de forma pura sin mutar el estado original", () => {
+      const original = crearEstado();
+      const nuevoTheta = (10 * Math.PI) / 180;
+      const actualizado = setTheta(original, nuevoTheta);
+
+      expect(actualizado.mesa.inclinacion).toBe(nuevoTheta);
+      expect(original.mesa.inclinacion).toBe(INCLINACION_INICIAL);
+      expect(setAngle(original, nuevoTheta)).toEqual(actualizado);
+    });
   });
 });

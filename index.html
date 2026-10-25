@@ -3,18 +3,181 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pinball — Física I</title>
+    <title>Mesa Inclinada — Física I</title>
   </head>
   <body>
-    <header>
-      <h1>Pinball</h1>
+    <header class="navbar">
+      <div class="navbar-title">
+        <h1>Mesa Inclinada</h1>
+        <span>Física I (FUN-18) · Universidad CENFOTEC</span>
+      </div>
+      <div id="estado-simulacion" class="status-pill status-paused">Pausado</div>
     </header>
-    <main>
-      <canvas id="mesa" aria-label="Mesa de pinball"></canvas>
-      <aside id="panel">
-        <p id="estado"></p>
+
+    <main class="container">
+      <!-- Columna Izquierda: Mesa Canvas -->
+      <section class="mesa-section">
+        <div class="panel-header">
+          <h2>Simulación (0.56 m × 1.05 m)</h2>
+          <span class="hint-click">Clic en la mesa para mover la bola</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="mesa" aria-label="Lienzo de la mesa inclinada"></canvas>
+        </div>
+        <div class="mesa-legend">
+          <span><span class="legend-dot dot-bola"></span> Bola (m = 0.08 kg, r = 1.3 cm)</span>
+          <span><span class="legend-dot dot-plano"></span> Obstáculo (e = 0.60)</span>
+          <span><span class="legend-dot dot-bumper"></span> Bumper (e = 0.80)</span>
+        </div>
+      </section>
+
+      <!-- Columna Derecha: Controles y Datos -->
+      <aside class="sidebar">
+        <!-- Controles -->
+        <section class="card">
+          <h3>Controles</h3>
+          
+          <div class="button-row">
+            <button id="btn-play" class="btn btn-primary">
+              <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <polygon points="6,4 20,12 6,20" />
+              </svg>
+              <span>Iniciar</span>
+            </button>
+            <button id="btn-paso" class="btn btn-secondary">
+              <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <polygon points="5,4 15,12 5,20" />
+                <rect x="17" y="4" width="3" height="16" rx="0.5" />
+              </svg>
+              <span>Paso</span>
+            </button>
+            <button id="btn-reiniciar" class="btn btn-secondary">
+              <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+              <span>Reiniciar</span>
+            </button>
+          </div>
+
+          <!-- Ángulo -->
+          <div class="form-group">
+            <div class="label-row">
+              <label for="slider-angulo">Inclinación (θ):</label>
+              <span id="valor-angulo" class="badge-value">6.5° (0.113 rad)</span>
+            </div>
+            <input
+              id="slider-angulo"
+              type="range"
+              min="3.0"
+              max="15.0"
+              step="0.1"
+              value="6.5"
+            />
+            <div class="slider-marks">
+              <span>3.0°</span>
+              <span>6.5°</span>
+              <span>10.0°</span>
+              <span>15.0°</span>
+            </div>
+          </div>
+
+          <!-- Selectores -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="select-escenario">Escenario:</label>
+              <select id="select-escenario">
+                <option value="headless" selected>1. Validación (Piso 0.70 m)</option>
+                <option value="laboratorio">2. Mesa con Bumpers</option>
+                <option value="caida_libre">3. Caída Libre</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label for="select-velocidad">Velocidad:</label>
+              <select id="select-velocidad">
+                <option value="0.25">0.25×</option>
+                <option value="0.5">0.50×</option>
+                <option value="1" selected>1.00× (Normal)</option>
+                <option value="2">2.00×</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Checkboxes y CSV -->
+          <div class="options-row">
+            <div class="checkboxes">
+              <label><input id="check-vectores" type="checkbox" checked /> Vector v</label>
+              <label><input id="check-rastro" type="checkbox" checked /> Rastro</label>
+              <label><input id="check-rejilla" type="checkbox" checked /> Rejilla</label>
+            </div>
+            <button id="btn-exportar" class="btn btn-sm btn-outline">
+              <svg class="icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>Exportar CSV</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Telemetría en formato de tabla limpia -->
+        <section class="card">
+          <h3>Telemetría</h3>
+          <table class="telemetria-table">
+            <tbody>
+              <tr>
+                <th>Tiempo (t):</th>
+                <td id="telemetria-tiempo">0.000 s</td>
+                <th>Inclinación (θ):</th>
+                <td id="telemetria-angulo">6.5° (0.113 rad)</td>
+              </tr>
+              <tr>
+                <th>Rapidez (|v|):</th>
+                <td id="telemetria-rapidez">0.000 m/s</td>
+                <th>Aceleración (a):</th>
+                <td id="telemetria-aceleracion">1.11 m/s²</td>
+              </tr>
+              <tr>
+                <th>Posición (x, y):</th>
+                <td id="telemetria-posicion" colspan="3">(0.28, 0.10) m</td>
+              </tr>
+              <tr>
+                <th>Cinética (K):</th>
+                <td id="telemetria-k">0.0000 J</td>
+                <th>Potencial (Ug):</th>
+                <td id="telemetria-ug">0.0844 J</td>
+              </tr>
+              <tr>
+                <th>Mecánica (Em):</th>
+                <td id="telemetria-em">0.0844 J</td>
+                <th>Colisiones:</th>
+                <td id="telemetria-colisiones">0</td>
+              </tr>
+              <tr>
+                <th>E. Disipada (Σ ΔE):</th>
+                <td id="telemetria-disipada" colspan="3">0.0000 J</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Gráficas -->
+        <section class="card charts-card">
+          <div class="chart-container">
+            <canvas id="grafica-rapidez"></canvas>
+          </div>
+          <div class="chart-container">
+            <canvas id="grafica-energia"></canvas>
+          </div>
+        </section>
       </aside>
     </main>
+
+    <footer class="footer">
+      <small>Proyecto Física I (FUN-18) · CENFOTEC · Danny Arias, Fabiola Román, Luis Ángel Sánchez, Fabián Vargas</small>
+    </footer>
+
     <script type="module" src="/src/ui/main.ts"></script>
   </body>
 </html>

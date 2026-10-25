@@ -1,117 +1,178 @@
-# Pinball — Simulación de física (Física I, FUN-18)
+# Simulación de Física I — Sistema Dinámico de Mesa Inclinada y Pinball
 
-Proyecto 6: Pinball (nivel Reto). Universidad CENFOTEC.
+Simulador interactivo web basado en un motor de física propio (determinista y desacoplado) desarrollado en TypeScript para el curso **Física I (FUN-18)** de la **Universidad CENFOTEC**.
 
-Integrantes: Danny Jhoel Arias Jiménez, Fabiola María Román Barrantes, Luis Ángel Sánchez Badilla, Fabián Vargas Hidalgo.
+**Integrantes:**
+* Danny Jhoel Arias Jiménez
+* Fabiola María Román Barrantes
+* Luis Ángel Sánchez Badilla
+* Fabián Vargas Hidalgo
 
-## Comandos
+---
 
-| Acción | Comando |
-| --- | --- |
-| Instalar dependencias | `npm install` |
-| Correr pruebas | `npm test` |
-| Ejecución headless (genera `output/simulacion.csv`; ver columnas más abajo) | `npm run headless` |
-| Servidor de desarrollo | `npm run dev` |
-| Verificar tipos (incluye la librería sin tipos del DOM) | `npm run typecheck` |
+## Comandos del Proyecto
 
-## Estructura
+| Acción | Comando | Descripción |
+| :--- | :--- | :--- |
+| **Instalar dependencias** | `npm install` | Instala TypeScript, Vite, Vitest y dependencias de graficación. |
+| **Correr pruebas** | `npm test` | Ejecuta la suite de pruebas unitarias y de validación analítica (54 pruebas). |
+| **Simulación headless** | `npm run headless` | Ejecuta el escenario determinista sin DOM y genera `output/simulacion.csv`. |
+| **Servidor de desarrollo** | `npm run dev` | Inicia el servidor local interactivo de Vite en `http://localhost:5173/`. |
+| **Verificación estricta de tipos** | `npm run typecheck` | Ejecuta `tsc` para la UI y `tsconfig.physics.json` (verifica que física no use DOM). |
+| **Construcción de producción** | `npm run build` | Compila los paquetes optimizados en `dist/` para despliegue (ej. Vercel). |
 
-- `src/physics/`: librería de física. No usa `document`, `window`, `canvas` ni `requestAnimationFrame`.
-- `src/ui/`: interfaz que consume la librería.
-- `tests/physics/`: pruebas unitarias y de validación analítica.
-- `scripts/headless.ts`: escenario fijo sin interfaz que escribe un CSV en `output/`.
-- `evidencia/`: copia versionada del CSV headless (`simulacion_ejemplo.csv`), para auditar el modelo sin ejecutar nada. Es determinista: regenerarlo con `npm run headless` produce el mismo contenido.
+---
 
-Restricciones: solo tecnologías web, sin motores físicos de terceros. Dependencia de ejecución: Chart.js (graficación).
+## Arquitectura y Estructura del Código
 
-## Convenciones
+El repositorio implementa una estricta separación de responsabilidades:
 
-Todo el núcleo opera en el Sistema Internacional: m, kg, s, rad, N, J. El origen está en la esquina superior izquierda de la mesa, con x hacia la derecha e y hacia abajo. Las funciones son puras y deterministas.
+```
+├── src/
+│   ├── physics/               # Núcleo de física puro (SI: m, kg, s, rad, N, J)
+│   │   ├── constants.ts       # Constantes del modelo (dimensiones, masas, rigideces, restituciones)
+│   │   ├── types.ts           # Interfaces de datos inmutables (Vec2, Bola, Obstaculos, EstadoGlobal)
+│   │   ├── vec2.ts            # Álgebra vectorial pura 2D
+│   │   ├── gravity.ts         # Gravedad efectiva en plano inclinado (a = g·sen θ)
+│   │   ├── integrator.ts      # Integración cinemática determinista
+│   │   ├── collisions.ts      # Detección estática y continua (CCD) contra círculos y segmentos
+│   │   ├── response.ts        # Respuesta dinámica al choque e impulso con restitución e
+│   │   ├── launcher.ts        # Modelo elástico de compresión y velocidad de lanzamiento
+│   │   ├── energy.ts          # Cálculos analíticos de K, Ug y Em
+│   │   ├── flipper.ts         # Cinemática angular de paletas (fase final)
+│   │   ├── world.ts           # Orquestador del paso temporal (avanzarSimulacion, setTheta)
+│   │   └── index.ts           # Exportación de la API pública del motor
+│   └── ui/                    # Capa de presentación y visualización web
+│       ├── renderer.ts        # Renderizado en Canvas 2D (escala métrica, bola, obstáculos, vectores)
+│       ├── controls.ts        # Enlace del panel de control (Play, Pause, Step, Reset, slider θ, presets)
+│       ├── charts.ts          # Gráficas en tiempo real de Chart.js (G2 Rapidez y G3 Balance de Energía)
+│       ├── series.ts          # Estructura de serie temporal con ventana deslizante (10 s)
+│       ├── main.ts            # Integración del bucle temporal a 240 Hz y HUD de telemetría
+│       └── style.css          # Estilo sobrio y claro (verde institucional, blanco, iconos SVG)
+├── tests/
+│   ├── physics/               # Pruebas de validación analítica, colisiones y balance energético
+│   └── ui/                    # Pruebas unitarias de componentes de interfaz (series temporales)
+├── scripts/
+│   └── headless.ts            # Ejecución por consola de 10 s de simulación con exportación CSV
+├── evidencia/
+│   └── simulacion_ejemplo.csv # Registro determinista de referencia para auditoría científica
+├── tsconfig.json              # Configuración general de TypeScript para el proyecto web
+└── tsconfig.physics.json      # Configuración que aísla la física (`types: []`, sin DOM ni Window)
+```
 
-## API pública (`src/physics/index.ts`)
+---
 
-### Álgebra vectorial (`vec2`)
+## Convenciones y Sistema de Unidades
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `sumar(a, b)` / `restar(a, b)` | dos `Vec2` | `Vec2` |
-| `escalar(v, k)` | `Vec2`, escalar | `Vec2` |
-| `punto(a, b)` | dos `Vec2` | número |
-| `norma(v)` | `Vec2` | número (m o m/s) |
-| `normalizar(v)` | `Vec2` | `Vec2` unitario (nulo si \|v\| = 0) |
-| `perpendicular(v)` | `Vec2` | `Vec2` rotado 90° |
+1. **Unidades del SI:** Toda la biblioteca física opera exclusivamente en metros ($m$), kilogramos ($kg$), segundos ($s$), radianes ($rad$), Newtons ($N$) y Joules ($J$).
+2. **Sistema de Coordenadas:** Origen $(0, 0)$ en la esquina superior izquierda de la mesa. El eje $+x$ avanza hacia la derecha y el eje $+y$ avanza hacia abajo en la dirección de la pendiente.
+3. **Determinismo y Pureza:** Las funciones del motor no mutan sus argumentos; toman un estado y retornan uno nuevo. Mismo estado inicial y mismo $\Delta t$ producen idéntico resultado matemático en cualquier plataforma.
 
-### Gravedad (`gravity`)
+---
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `gravedadEfectiva(g, theta)` | g (m/s²), θ (rad) | `Vec2` aceleración (m/s²) = (0, g·sen θ) |
+## Documentación de la API Pública del Motor Físico (`src/physics/`)
 
-### Integración (`integrator`)
+### 1. Álgebra Vectorial (`vec2.ts`)
+* `sumar(a: Vec2, b: Vec2): Vec2` — Suma de vectores.
+* `restar(a: Vec2, b: Vec2): Vec2` — Resta de vectores.
+* `escalar(v: Vec2, k: number): Vec2` — Multiplicación por escalar.
+* `punto(a: Vec2, b: Vec2): number` — Producto escalar $a \cdot b$.
+* `norma(v: Vec2): number` — Magnitud Euclidiana $\|v\|$ ($m$ o $m/s$).
+* `normalizar(v: Vec2): Vec2` — Vector unitario en dirección de $v$.
+* `perpendicular(v: Vec2): Vec2` — Vector rotado $90^\circ$ $(-y, x)$.
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `avanzarBola(bola, aceleracion, dt)` | `Bola`, aceleración (m/s²), Δt (s) | `Bola` actualizada |
+### 2. Gravedad Efectiva (`gravity.ts`)
+* `gravedadEfectiva(g: number, theta: number): Vec2` — Aceleración sobre la mesa inclinada: $a = (0, g \sin\theta)$ en $m/s^2$.
 
-### Colisiones (`collisions`)
+### 3. Integración Temporal (`integrator.ts`)
+* `avanzarBola(bola: Bola, aceleracion: Vec2, dt: number): Bola` — Integración analítica exacta con aceleración constante durante el paso:
+  $$p(t + \Delta t) = p(t) + v(t)\Delta t + \frac{1}{2}a\Delta t^2$$
+  $$v(t + \Delta t) = v(t) + a\Delta t$$
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `contactoBolaCirculo(bola, obstaculo)` | `Bola`, `ObstaculoCircular` | `null` o `{ punto (m), normal, profundidad (m) }` |
-| `contactoBolaSegmento(bola, obstaculo)` | `Bola`, `ObstaculoPlano` | `null` o `{ punto (m), normal, profundidad (m) }` |
-| `impactoContinuoCirculo(pAnterior, pSiguiente, radioBola, obstaculo)` | posiciones (m), radio (m), `ObstaculoCircular` | `null` o `{ t ∈ [0,1], punto (m), normal }` |
-| `impactoContinuoSegmento(pAnterior, pSiguiente, radioBola, obstaculo, vObstaculo?, dt?)` | posiciones (m), radio (m), `ObstaculoPlano`, velocidad del obstáculo (m/s), Δt (s) | `null` o `{ t ∈ [0,1], punto (m), normal }` |
-| `primerImpacto(pAnterior, pSiguiente, radioBola, circulos, planos)` | posiciones (m), radio (m), listas de obstáculos | `null` o impacto con `tipo` e `indice` |
+### 4. Detección de Colisiones (`collisions.ts`)
+* `contactoBolaCirculo(bola, obstaculo): Contacto | null` — Contacto estático contra círculo.
+* `contactoBolaSegmento(bola, obstaculo): Contacto | null` — Contacto estático contra segmento.
+* `impactoContinuoCirculo(pAnterior, pSiguiente, radio, obstaculo): Impacto | null` — Detección continua de trayectoria contra círculo (evita efecto túnel).
+* `impactoContinuoSegmento(pAnterior, pSiguiente, radio, obstaculo): Impacto | null` — Detección continua de trayectoria contra segmento.
+* `primerImpacto(pAnterior, pSiguiente, radio, circulos, planos): ImpactoIdentificado | null` — Determina cronológicamente la primera colisión dentro del paso.
 
-### Resolución de impactos (`response`)
+### 5. Respuesta Dinámica al Impacto (`response.ts`)
+* `respuestaChoque(velocidad, normal, restitucion, masa, velocidadSuperficie?): ResultadoChoque` — Resuelve el impacto sin fricción conservando la componente tangencial e invirtiendo la componente normal según el coeficiente $e$:
+  $$v' = v - (1 + e)[(v - v_s) \cdot n] n$$
+  Calcula el impulso transmitido $J = m(v' - v)$ y la energía disipada:
+  $$\Delta E = \frac{1}{2}m(1 - e^2)v_n^2$$
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `respuestaChoque(velocidad, normal, restitucion, masa, velocidadSuperficie?)` | velocidad (m/s), normal, e (adimensional), masa (kg), velocidad de la superficie (m/s) | `{ velocidad (m/s), impulso (kg·m/s), energiaDisipada (J) }` |
+### 6. Mecánica del Lanzador Elástico (`launcher.ts`)
+* `energiaElastica(k: number, compresion: number): number` — Energía potencial elástica $U_{el} = \frac{1}{2}kx^2$ ($J$).
+* `velocidadLanzamiento(compresion, k, masa, direccion): Vec2` — Velocidad inicial teórica por conservación elástica: $v_0 = x\sqrt{k/m}$ ($m/s$).
 
-### Lanzador (`launcher`)
+### 7. Balance Energético (`energy.ts`)
+* `energiaCinetica(bola: Bola): number` — $K = \frac{1}{2}m\|v\|^2$ ($J$).
+* `energiaPotencialGravitatoria(bola, g, theta, largoMesa): number` — $U_g = mg(L - y)\sin\theta$ ($J$) con nivel de referencia en la base de la mesa ($y = L$).
+* `energiaMecanica(bola, g, theta, largoMesa, uEl?): number` — Energía total $E = K + U_g + U_{el}$ ($J$).
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `energiaElastica(k, compresion)` | k (N/m), x (m) | energía (J) |
-| `velocidadLanzamiento(compresion, k, masa, direccion)` | x (m), k (N/m), masa (kg), dirección | `Vec2` velocidad (m/s) |
+### 8. Orquestador y Estado Global (`world.ts`)
+* `avanzarSimulacion(estado: EstadoGlobal, dt: number, entradas: EntradasUsuario): ResultadoPaso` — Avanza el sistema un paso $\Delta t$. Resuelve gravedad efectiva, integración, detección continua y hasta 8 rebotes múltiples por paso sin atravesamiento, devolviendo el nuevo estado y el registro de eventos de colisión.
+* `setTheta(estado: EstadoGlobal, theta: number): EstadoGlobal` (alias `setAngle`) — Modifica el ángulo $\theta$ en radianes de forma pura, permitiendo ajustar la inclinación en reposo o durante la simulación.
 
-### Energía (`energy`)
+---
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `energiaCinetica(bola)` | `Bola` | K (J) |
-| `energiaPotencialGravitatoria(bola, g, theta, largoMesa)` | `Bola`, g (m/s²), θ (rad), L (m) | Ug (J) |
-| `energiaMecanica(bola, g, theta, largoMesa, energiaElasticaLanzador?)` | ídem, Uel (J) | E = K + Ug + Uel (J) |
+## Validación Analítica y Pruebas Unitarias
 
-### Orquestador (`world`)
+La suite de Vitest certifica el cumplimiento riguroso de las leyes de Newton y la conservación energética:
 
-| Función | Recibe | Devuelve |
-| --- | --- | --- |
-| `avanzarSimulacion(estado, dt, entradas)` | `EstadoGlobal`, Δt (s), `EntradasUsuario` | `ResultadoPaso` = `{ estado: EstadoGlobal, eventos: EventoColision[] }` |
+1. **Caída por Plano Inclinado (`tests/physics/analytic.test.ts`):** Valida que la aceleración numérica coincida con $a = g\sin\theta$ (error $< 10^{-12}$) y que el tiempo de caída para recorrer una distancia $d$ satisfaga la solución cerrada $t = \sqrt{2d/a}$ con tolerancia inferior a $10^{-9}\text{ m}$.
+2. **Balance del Lanzador (`tests/physics/launcher.test.ts`):** Certifica la equivalencia $\frac{1}{2}kx^2 = \frac{1}{2}mv_0^2$ y que la bola supere la longitud del carril inicial.
+3. **Conservación de la Energía (`tests/physics/energy.test.ts`):** En ausencia de colisiones o con $e = 1.0$, la energía mecánica $E = K + U_g$ se mantiene constante dentro del $1\%$ tras 10 s de evolución temporal continua.
+4. **Disipación Exacta por Choque (`tests/physics/response.test.ts`):** Confirma que cada impacto disipe exactamente $\Delta E = \frac{1}{2}m(1 - e^2)v_n^2$ con tolerancia relativa de $10^{-9}$.
+5. **Balance Energético Global del Orquestador (`tests/physics/world.test.ts`):** Comprueba que en cada paso se cumpla $E_{antes} - E_{despues} = \sum \Delta E$ con tolerancia absoluta de $10^{-5}\text{ J}$, y que $E_0 - E_f$ coincida con la sumatoria de energía disipada en todos los rebotes.
 
-Orden dentro del paso: gravedad efectiva, integración de la bola, detección continua (`primerImpacto`), resolución con la restitución del obstáculo y la masa de la bola, y repetición con el tiempo restante del paso (contactos múltiples, hasta `MAX_CONTACTOS_POR_PASO` = 8). No modifica `estado`: mismo estado y mismo `dt` dan el mismo resultado. En el Avance 2 los flippers, el lanzador, el marcador y las vidas viajan en el estado pero aún no se actualizan.
+---
 
-| Tipo | Campos |
-| --- | --- |
-| `EntradasUsuario` | `flipperIzquierdo` (boolean), `flipperDerecho` (boolean), `compresionLanzador` (m) |
-| `EventoColision` | `instante` (s), `tipo` (`"circular"` o `"plano"`), `indice` (posición en su lista), `energiaDisipada` (J) |
-| `ResultadoPaso` | `estado` (`EstadoGlobal`), `eventos` (`EventoColision[]`) |
+## Escenario Headless y Auditoría de Telemetría
 
-## Pruebas de validación analítica
+El comando `npm run headless` ejecuta una simulación automatizada sin interfaz gráfica durante $t = 10.0\text{ s}$ ($\Delta t = 1/240\text{ s}$, 2400 pasos) con una bola soltada desde $(0.28, 0.10)\text{ m}$ con $\theta = 6.5^\circ$ rebotando contra un piso en $y = 0.70\text{ m}$ ($e = 0.60$).
 
-1. Caída por el plano inclinado: t = √(2d/a) con a = g·sen θ (`tests/physics/analytic.test.ts`).
-2. Balance de energía del lanzador: ½·k·x² = ½·m·v₀² y la bola alcanza el final del carril (`tests/physics/launcher.test.ts`).
-3. Sistema sin disipación: la energía mecánica se mantiene dentro del 1% tras 10 s simulados (`tests/physics/energy.test.ts`).
+Genera `output/simulacion.csv` con las siguientes columnas para análisis científico:
+* `t_s`: Tiempo simulado ($s$).
+* `x_m`, `y_m`: Coordenadas de posición ($m$).
+* `vx_m_s`, `vy_m_s`: Componentes de velocidad ($m/s$).
+* `K_J`: Energía cinética ($J$).
+* `Ug_J`: Energía potencial gravitatoria ($J$).
+* `Uel_J`: Energía elástica ($J$).
+* `E_J`: Energía mecánica total ($J$).
+* `colisiones`: Número de impactos detectados en el paso.
+* `E_disipada_J`: Joules disipados durante los impactos del paso.
 
-Además, `tests/physics/response.test.ts` valida la disipación por choque ΔE = ½·m·(1 − e²)·vₙ².
+---
 
-`tests/physics/world.test.ts` valida el orquestador: pureza (no modifica el estado de entrada), determinismo, contactos múltiples en un mismo paso sin atravesar obstáculos, energía disipada del evento = ½·m·(1 − e²)·vₙ² (tolerancia relativa 1e-9) y balance de energía con disipación (E antes − E después = energía disipada, tolerancia absoluta 1e-5 J por paso).
+## Interfaz de Usuario y Características Interactivas
 
-## Escenario y CSV del headless
+* **Diseño Sobrio y Académico:** Paleta de colores clara estructurada en verde institucional CENFOTEC (`#15803d`), blanco y gris neutro pizarra (`#f1f5f9`, `#e2e8f0`), con patrones limpios pre-2021 y sin uso de emojis (todos reemplazados por iconos vectoriales SVG).
+* **Control de Inclinación:** Control deslizante calibrado en el rango reglamentario $\theta \in [3.0^\circ, 15.0^\circ]$, con visualización simultánea en grados y radianes, actualizando en tiempo real la aceleración $a = g\sin\theta$.
+* **Controles de Laboratorio:** Iniciar, Pausar, Paso a paso ($\Delta t = 1/240\text{ s}$), Reiniciar y selector de velocidad de reproducción ($0.25\times, 0.50\times, 1.00\times, 2.00\times$) para inspección de colisiones en cámara lenta.
+* **Interacción Directa en Mesa:** Posibilidad de hacer clic sobre cualquier punto de la mesa para posicionar y soltar la bola instantáneamente.
+* **Escenarios Preconfigurados:**
+  1. *Validación Headless:* Plano en $y = 0.70\text{ m}$ ($e = 0.60$).
+  2. *Mesa con Bumpers:* Mesa completa con paredes laterales y parachoques circulares ($e = 0.80$).
+  3. *Caída Libre:* Plano libre sin obstáculos para verificación analítica de tiempos y aceleración.
+* **Doble Panel Gráfico en Tiempo Real (Chart.js):**
+  * **G2 — Rapidez vs. Tiempo:** Curva continua de rapidez con marcadores rojos discretos en cada evento de impacto.
+  * **G3 — Balance Energético vs. Tiempo:** Curvas simultáneas de energía cinética ($K$), potencial ($U_g$) y mecánica total ($E_m$), evidenciando visualmente las pérdidas en cada rebote.
+* **Exportador Telemétrico:** Botón de descarga de CSV con la sesión en vivo para análisis y auditoría.
 
-La bola parte del reposo en (0.28, 0.10) m con θ = 6.5° y rebota 10 s contra un piso horizontal en y = 0.70 m (e = 0.60, restitución de obstáculo plano). Columnas de `output/simulacion.csv`: `t_s` (s), `x_m`, `y_m` (m), `vx_m_s`, `vy_m_s` (m/s), `K_J`, `Ug_J`, `Uel_J`, `E_J` (J), `colisiones` (impactos en el paso) y `E_disipada_J` (J disipados en el paso).
+---
 
-## Estado
+## Estado del Proyecto
 
-Implementado: núcleo vectorial, gravedad efectiva, integración, detección de colisiones (estática y continua), resolución de impactos, lanzador, energías y orquestador (`avanzarSimulacion`). Pendiente para la Entrega Final: flippers, mecánica de juego (marcador, vidas, fin de partida), interfaz completa y gráficas G1 a G3.
+### Requisitos del Avance 2:
+- [x] Motor de física puro, determinista y desacoplado (en SI, sin DOM ni canvas).
+- [x] Suite de pruebas unitarias y de validación analítica pasando al 100% (54 pruebas).
+- [x] Script headless ejecutable que genera el archivo CSV reproducible con 10 s de datos.
+- [x] Interfaz interactiva desplegable con manipulación de parámetros ($\theta \in [3^\circ, 15^\circ]$, Play, Pause, Step, Reset).
+- [x] Gráficas en tiempo real de Rapidez vs. Tiempo (G2) y Balance de Energía (G3) con unidades SI.
+
+### Trabajo para la Entrega Final:
+- [ ] Implementación de la cinemática de paletas / flippers interactivos (`flipper.ts`).
+- [ ] Mecánicas de juego completas (marcador de puntos por rebote, vidas y fin de partida).
+- [ ] Refinamiento de modelos de fricción por contacto y arrastre en dinámica extendida.
